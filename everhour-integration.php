@@ -3,188 +3,13 @@
  * Plugin Name: Everhour integration
  * Description: Get Everhour API - reatiners, projects, list of tasks
  * Author: Valet - Milos Milosevic
- * Author URI: https://valet.io
+ * Author URI: https://mmilosevic.com
  * Version: 1.0
  */
-function get_data_from_everhour() {
 
-	$everhour_client_id = get_field( 'everhour_client_id' );
-
-	$ch = curl_init();
-
-	curl_setopt( $ch, CURLOPT_URL, 'https://api.everhour.com/projects/' . $everhour_client_id );
-	curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-	curl_setopt( $ch, CURLOPT_HEADER, false );
-
-	curl_setopt(
-		$ch,
-		CURLOPT_HTTPHEADER,
-		array(
-			'Content-Type: application/json',
-			'X-Api-Key: c51c-b701-e2f6af-c0f838-3177af42',
-		)
-	);
-
-	$get_valet_client = curl_exec( $ch );
-	curl_close( $ch );
-
-	$valet_client_clean = json_decode( $get_valet_client, true );
-
-	//if ( get_the_title() === $valet_client_clean['name'] ) {
-		echo '<style>h2, h3 {
-              margin-bottom: 0;
-              margin-top: 1.25em;
-            }</style>';
-
-		echo '<h2>Client: ' . esc_html( $valet_client_clean['name'] ) . '</h2> ';
-		if ( null !== $valet_client_clean['budget'] ) {
-
-			$retainer_total = $valet_client_clean['budget']['budget'];
-			$used_time      = $valet_client_clean['budget']['timeProgress'];
-
-			$retainer_total_hours = $retainer_total / 3600;
-			$used_time_hours      = round( $used_time / 3600, 2 );
-			// Check when plan refreshes.
-			if ( 1 === $valet_client_clean['budget']['monthStartDate'] ) {
-				$retainer_refresh_date = 'every 1st of month.';
-			}
-			if ( 2 === $valet_client_clean['budget']['monthStartDate'] ) {
-				$retainer_refresh_date = 'every 2nd of month.';
-			}
-			if ( 3 === $valet_client_clean['budget']['monthStartDate'] ) {
-				$retainer_refresh_date = 'every 3rd of month.';
-			}
-			if ( 3 < $valet_client_clean['budget']['monthStartDate'] ) {
-				$retainer_refresh_date = 'every ' . $valet_client_clean['budget']['monthStartDate'] . 'th of month.';
-			}
-			// todo - annual retainers.
-
-			if ( $retainer_total_hours < 3 ) {
-				echo 'Care Plan: Basic';
-				echo '<br>';
-			}
-			if ( $retainer_total_hours > 3 && $retainer_total_hours < 8 ) {
-				echo 'Care Plan: Professional';
-				echo '<br>';
-			}
-			if ( $retainer_total_hours > 8 && $retainer_total_hours < 26 ) {
-				echo 'Care Plan: Elite';
-				echo '<br>';
-			}
-			echo 'Hours Refresh: ' . esc_html( $retainer_refresh_date );
-			echo '<h3>Current month: ' . esc_html( $used_time_hours ) . ' of ' . esc_html( $retainer_total_hours ) . ' hours used</h3> ';
-
-		}
-	//}
-	// Get Client list of tasks
-	$ch = curl_init();
-
-	curl_setopt( $ch, CURLOPT_URL, 'https://api.everhour.com/projects/' . $everhour_client_id . '/tasks' );
-	curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-	curl_setopt( $ch, CURLOPT_HEADER, false );
-
-	curl_setopt(
-		$ch,
-		CURLOPT_HTTPHEADER,
-		array(
-			'Content-Type: application/json',
-			'X-Api-Key: c51c-b701-e2f6af-c0f838-3177af42',
-		)
-	);
-
-	$client_get_tasks = curl_exec( $ch );
-	curl_close( $ch );
-
-	$client_tasks_clean = json_decode( $client_get_tasks, true );
-
-	foreach ( $client_tasks_clean as $key => $part ) {
-		$sort[ $key ] = strtotime( $part['createdAt'] );
-	}
-	array_multisort( $sort, SORT_DESC, $client_tasks_clean );
-
-	$closed_tasks = array();
-	$open_tasks   = array();
-	foreach ( $client_tasks_clean as $item ) {
-		if ( strpos( $item['status'], 'complete' ) !== false ) {
-			$closed_tasks[] = $item;
-		} else {
-			$open_tasks[] = $item;
-		}
-	}
-
-	if ( ! empty( $open_tasks ) ) {
-		echo '<h3>Open Tasks:</h3>';?>
-<style>
-td {
-border: 1px solid;
-}
-</style>
-
-<table style="width:100%">
-<tr>
-  <th>Date</th>
-  <th>Name of the task</th>
-  <th>Hours spent</th>
-</tr>
-		<?php
-		foreach ( $open_tasks as $single_open_task ) {
-			$timestamp            = strtotime( $single_open_task['createdAt'] );
-			$open_task_used_time  = $single_open_task['time']['total'];
-			$open_task_hours_used = round( $open_task_used_time / 3600, 2 );
-			$open_task_date       = date( 'M-d', $timestamp );
-			if ( $open_task_hours_used > 0 ) {
-				echo '<tr><td>' . esc_html( $open_task_date ) . '</td><td>' . esc_html( $single_open_task['name'] ) . '</td>' . '<td>' . esc_html( $open_task_hours_used ) . '</td></tr>';
-			}
-		}
-		?>
-</table>
-		<?php
-	} else {
-		echo '<h3>There are no open tasks at the moment.</h3>';
-	}
-
-	if ( ! empty( $closed_tasks ) ) {
-		echo '<h3>History:</h3>';
-		?>
-<style>
-  td {
-  border: 1px solid;
-}
-</style>
-<table style="width:100%">
- <tr>
-  <th>Date</th>
-  <th>Name of the task</th>
-  <th>Hours spent</th>
-  </tr>
-
-		<?php
-		foreach ( $closed_tasks as $single_closed_task ) {
-			$closed_task_timestamp   = strtotime( $single_closed_task['createdAt'] );
-			$closed_task_date   = date( 'M-d', $closed_task_timestamp );
-			$closed_task_used_time = $single_closed_task['time']['total'];
-			$closed_task_used_hours     = round( $closed_task_used_time / 3600, 2 );
-
-			if ( ! str_contains( $single_closed_task['name'], 'Balance Transfer' ) && $closed_task_used_hours > 0 ) {
-				echo '<tr><td>' . esc_html( $closed_task_date ) . '</td><td>' . esc_html( $single_closed_task['name'] ) . '</td>' . '<td>' . esc_html( $closed_task_used_hours ) . '</td></tr>';
-			}
-		}
-		?>
-
-</table>
-
-		<?php
-		if ( $retainer_total_hours > 8 ) {
-			echo '<br><b>If you have 911, please reach out here.</b>';
-		}
-	}
-}
-
-add_shortcode( 'get_data_from_everhour', 'get_data_from_everhour' );
-
-
-
-// Register Custom Post Type
+/**
+ * Register Custom Post Type
+ */
 function valet_portal_clients() {
 
 	$labels = array(
@@ -236,97 +61,101 @@ function valet_portal_clients() {
 		'capability_type'     => 'page',
 	);
 	register_post_type( 'valet-client', $args );
-
 }
-
 add_action( 'init', 'valet_portal_clients', 0 );
 
-/*
-function redirect_after_login() {
-	$milos = get_field( 'everhour_client_id', 9 );
-
-	return $milos;
-
-		//return '/valet-client/';
-
-}
-
-add_filter( 'login_redirect', 'redirect_after_login' );
-
-*/
-
-
-
-
-
-function my_login_redirect( $redirect_to, $request, $user ) {
-
-$valet_client_id = get_user_meta($user->ID, 'valet_client');
-
-
-$post_id = $valet_client_id[0];
-$post = get_post($post_id); 
-$slug = $post->post_name;
-
-return '/valet-client/' . $slug;
-
-}
-
-add_filter( 'login_redirect', 'my_login_redirect', 10, 3 );
-
-
+/**
+ * Add Custom Portal Valet role
+ */
 add_role(
 	'basic_contributor',
 	'Valet Client',
 	array(
-		'read'         => true, // True allows that capability
+		'read'         => true, // True allows that capability.
 		'edit_posts'   => false,
-		'delete_posts' => false, // Use false to explicitly deny
+		'delete_posts' => false, // Use false to explicitly deny.
 	)
 );
 
+/**
+ * Redirect upon login
+ *
+ * @param redirect_to $redirect_to get from login_redirect.
+ * @param request     $request get from login_redirect.
+ * @param user        $user get from login_redirect.
+ */
+function valet_client_redirect( $redirect_to, $request, $user ) {
+
+	$valet_client_id = get_user_meta( $user->ID, 'valet_client' );
+	if ( ! is_admin() ) {
+
+		$post_id = $valet_client_id[0];
+		$post    = get_post( $post_id );
+		$slug    = $post->post_name;
+
+		return '/valet-client/' . $slug;
+	}
+}
+
+add_filter( 'login_redirect', 'valet_client_redirect', 10, 3 );
 
 
+function custom_login_form_shortcode() {
+	if ( ! is_user_logged_in() ) {
+		ob_start();
+		wp_login_form();
+		$forgot_password_link = wp_lostpassword_url();
+		echo '<a href="' . esc_html( $forgot_password_link ) . '">' . __( 'Forgot Password?' ) . '</a>';
+		return ob_get_clean();
+	}
+}
+add_shortcode( 'login_form', 'custom_login_form_shortcode' );
 
 
+add_action( 'wp_login_failed', 'custom_login_failed' );
 
+function custom_login_failed( $username ) {
+	$referrer = wp_get_referer();
 
+	if ( $referrer && ! strstr( $referrer, 'wp-login' ) && ! strstr( $referrer, 'wp-admin' ) ) {
+		wp_redirect( add_query_arg( 'login', 'failed', $referrer ) );
+		exit;
+	}
+}
+/**
+ * Get data from EH and form arrays
+ */
+function valet_get_data_from_everhour() {
 
+	$plan                  = '';
+	$retainer_refresh_date = '';
+	$used_time_hours       = '';
+	$retainer_total_hours  = '';
+	$everhour_client_id    = get_field( 'everhour_client_id' );
 
+	if ( null !== $everhour_client_id ) {
 
+		$ch = curl_init();
 
+		curl_setopt( $ch, CURLOPT_URL, 'https://api.everhour.com/projects/' . $everhour_client_id );
+		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+		curl_setopt( $ch, CURLOPT_HEADER, false );
 
+		curl_setopt(
+			$ch,
+			CURLOPT_HTTPHEADER,
+			array(
+				'Content-Type: application/json',
+				'X-Api-Key: add_key',
+			)
+		);
 
+		$get_valet_client = curl_exec( $ch );
+		curl_close( $ch );
 
-function get_data_from_everhour2() {
+		$valet_client_clean = json_decode( $get_valet_client, true );
 
-	$everhour_client_id = get_field( 'everhour_client_id' );
-
-	$ch = curl_init();
-
-	curl_setopt( $ch, CURLOPT_URL, 'https://api.everhour.com/projects/' . $everhour_client_id );
-	curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-	curl_setopt( $ch, CURLOPT_HEADER, false );
-
-	curl_setopt(
-		$ch,
-		CURLOPT_HTTPHEADER,
-		array(
-			'Content-Type: application/json',
-			'X-Api-Key: c51c-b701-e2f6af-c0f838-3177af42',
-		)
-	);
-
-	$get_valet_client = curl_exec( $ch );
-	curl_close( $ch );
-
-	$valet_client_clean = json_decode( $get_valet_client, true );
-
-	//if ( get_the_title() === $valet_client_clean['name'] ) {
-
-
-		//echo '<h2>Client: ' . esc_html( $valet_client_clean['name'] ) . '</h2> ';
-		if ( null !== $valet_client_clean['budget'] ) {
+		if ( isset( $valet_client_clean['budget'] ) ) {
 
 			$retainer_total = $valet_client_clean['budget']['budget'];
 			$used_time      = $valet_client_clean['budget']['timeProgress'];
@@ -349,113 +178,115 @@ function get_data_from_everhour2() {
 			// todo - annual retainers.
 
 			if ( $retainer_total_hours < 3 ) {
-				$plan = 'Care Plan: Basic';
+				$plan = 'Basic';
 
 			}
 			if ( $retainer_total_hours > 3 && $retainer_total_hours < 8 ) {
-				$plan = 'Care Plan: Professional';
+				$plan = 'Professional';
 
 			}
 			if ( $retainer_total_hours > 8 && $retainer_total_hours < 26 ) {
-				$plan = 'Care Plan: Elite';
+				$plan = 'Elite';
 
 			}
-			//echo 'Hours Refresh: ' . esc_html( $retainer_refresh_date );
-			//echo '<h3>Current month: ' . esc_html( $used_time_hours ) . ' of ' . esc_html( $retainer_total_hours ) . ' hours used</h3> ';
-
-
-
 		}
-	//}
-	// Get Client list of tasks
-	$ch = curl_init();
 
-	curl_setopt( $ch, CURLOPT_URL, 'https://api.everhour.com/projects/' . $everhour_client_id . '/tasks' );
-	curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-	curl_setopt( $ch, CURLOPT_HEADER, false );
+		$ch = curl_init();
 
-	curl_setopt(
-		$ch,
-		CURLOPT_HTTPHEADER,
-		array(
-			'Content-Type: application/json',
-			'X-Api-Key: c51c-b701-e2f6af-c0f838-3177af42',
-		)
-	);
+		curl_setopt( $ch, CURLOPT_URL, 'https://api.everhour.com/projects/' . $everhour_client_id . '/tasks' );
+		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+		curl_setopt( $ch, CURLOPT_HEADER, false );
 
-	$client_get_tasks = curl_exec( $ch );
-	curl_close( $ch );
+		curl_setopt(
+			$ch,
+			CURLOPT_HTTPHEADER,
+			array(
+				'Content-Type: application/json',
+				'X-Api-Key: api_key',
+			)
+		);
 
-	$client_tasks_clean = json_decode( $client_get_tasks, true );
+		$client_get_tasks = curl_exec( $ch );
+		curl_close( $ch );
 
-	foreach ( $client_tasks_clean as $key => $part ) {
-		$sort[ $key ] = strtotime( $part['createdAt'] );
-	}
-	array_multisort( $sort, SORT_DESC, $client_tasks_clean );
+		$client_tasks_clean = json_decode( $client_get_tasks, true );
 
-	$closed_tasks = array();
-	$open_tasks   = array();
-	foreach ( $client_tasks_clean as $item ) {
-		if ( strpos( $item['status'], 'complete' ) !== false ) {
-			$closed_tasks[] = $item;
+		foreach ( $client_tasks_clean as $key => $part ) {
+			$sort[ $key ] = strtotime( $part['createdAt'] );
+		}
+		array_multisort( $sort, SORT_DESC, $client_tasks_clean );
+
+		$valet_single_client_closed_tasks = array();
+		$valet_single_client_open_tasks   = array();
+		foreach ( $client_tasks_clean as $item ) {
+			if ( strpos( $item['status'], 'complete' ) !== false ) {
+				$closed_tasks[] = $item;
+			} else {
+				$open_tasks[] = $item;
+			}
+		}
+
+		if ( ! empty( $open_tasks ) ) {
+			global $valet_single_client_open_tasks;
+			foreach ( $open_tasks as $single_open_task ) {
+				$timestamp = strtotime( $single_open_task['createdAt'] );
+				if ( isset( $single_open_task['time'] ) ) {
+					$open_task_used_time  = $single_open_task['time']['total'];
+					$open_task_hours_used = round( $open_task_used_time / 3600, 2 );
+				} else {
+					$open_task_hours_used = 0;
+				}
+					$open_task_date = gmdate( 'M-d', $timestamp );
+				if ( $open_task_hours_used > 0 ) {
+					$valet_single_client_open_tasks[] = array(
+						'open_task_name'       => $single_open_task['name'],
+						'open_task_date'       => $open_task_date,
+						'open_task_used_hours' => $open_task_hours_used,
+					);
+
+				}
+			}
 		} else {
-			$open_tasks[] = $item;
-		}
-	}
-
-	if ( ! empty( $open_tasks ) ) {
-		//echo '<h3>Open Tasks:</h3>';?>
-
-		<?php
-		global $open;
-		foreach ( $open_tasks as $single_open_task ) {
-			$timestamp            = strtotime( $single_open_task['createdAt'] );
-			$open_task_used_time  = $single_open_task['time']['total'];
-			$open_task_hours_used = round( $open_task_used_time / 3600, 2 );
-			$open_task_date       = date( 'M-d', $timestamp );
-			if ( $open_task_hours_used > 0 ) {
-				//echo '<tr><td>' . esc_html( $open_task_date ) . '</td><td>' . esc_html( $single_open_task['name'] ) . '</td>' . '<td>' . esc_html( $open_task_hours_used ) . '</td></tr>';
-			$open[] = array ("open_task_name" => $single_open_task['name'], "open_task_date" => $open_task_date, "open_task_used_hours" => $open_task_hours_used);
-		
+			global $valet_single_client_open_tasks;  $valet_single_client_open_tasks[] = array(
+				'open_task_name'       => 'No open tasks',
+				'open_task_date'       => '',
+				'open_task_used_hours' => '',
+			); }
+		if ( ! empty( $closed_tasks ) ) {
+			global $valet_single_client_closed_tasks;
+			foreach ( $closed_tasks as $single_closed_task ) {
+				$closed_task_timestamp = strtotime( $single_closed_task['createdAt'] );
+				if ( isset( $single_closed_task['time'] ) ) {
+					$closed_task_date       = gmdate( 'M-d', $closed_task_timestamp );
+					$closed_task_used_time  = $single_closed_task['time']['total'];
+					$closed_task_used_hours = round( $closed_task_used_time / 3600, 2 );
+				} else {
+					$closed_task_used_hours = 0;
+				}
+				if ( ! str_contains( $single_closed_task['name'], 'Balance Transfer' ) && $closed_task_used_hours > 0 ) {
+					$valet_single_client_closed_tasks[] = array(
+						'closed_task_name'       => $single_closed_task['name'],
+						'closed_task_date'       => $closed_task_date,
+						'closed_task_used_hours' => $closed_task_used_hours,
+					);
+				}
 			}
-		}
+		} else {
+			global $valet_single_client_closed_tasks;    $valet_single_client_closed_tasks[] = array(
+				'closed_task_name'       => 'No closed tasks',
+				'closed_task_date'       => '',
+				'closed_task_used_hours' => '',
+			); }
 
-		?>
-</table>
-		<?php
-	} else {
-		//echo '<h3>There are no open tasks at the moment.</h3>';
-	}
+		global $valet_get_client_data;
 
-	if ( ! empty( $closed_tasks ) ) {
-		//echo '<h3>History:</h3>';
-		?>
-
-
-		<?php
-		global $closed;
-		foreach ( $closed_tasks as $single_closed_task ) {
-			$closed_task_timestamp   = strtotime( $single_closed_task['createdAt'] );
-			$closed_task_date   = date( 'M-d', $closed_task_timestamp );
-			$closed_task_used_time = $single_closed_task['time']['total'];
-			$closed_task_used_hours     = round( $closed_task_used_time / 3600, 2 );
-
-			if ( ! str_contains( $single_closed_task['name'], 'Balance Transfer' ) && $closed_task_used_hours > 0 ) {
-				//echo '<tr><td>' . esc_html( $closed_task_date ) . '</td><td>' . esc_html( $single_closed_task['name'] ) . '</td>' . '<td>' . esc_html( $closed_task_used_hours ) . '</td></tr>';
-			$closed[] = array ("closed_task_name" => $single_closed_task['name'], "closed_task_date" => $closed_task_date, "closed_task_used_hours" => $closed_task_used_hours);		
-			}
-		}
-		?>
-
-</table>
-
-		<?php
-		if ( $retainer_total_hours > 8 ) {
-			$valet_emergency = true;
-		}
-			global $all;
-			$all = array("plan" => $plan, "retainer_refresh_date" => $retainer_refresh_date, "used_time_hours" => $used_time_hours, "retainer_total_hours" => $retainer_total_hours, "911" =>$valet_emergency);		
+		$valet_get_client_data = array(
+			'plan'                  => $plan,
+			'retainer_refresh_date' => $retainer_refresh_date,
+			'used_time_hours'       => $used_time_hours,
+			'retainer_total_hours'  => $retainer_total_hours,
+		);
 	}
 }
 
-add_shortcode( 'get_data_from_everhour2', 'get_data_from_everhour2' );
+		add_shortcode( 'valet_get_data_from_everhour', 'valet_get_data_from_everhour' );
